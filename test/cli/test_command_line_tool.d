@@ -66,10 +66,18 @@ int runExtractionTests(const string testBaseDir, const string outBaseDir, const 
     {
         auto file = entry.name;
         auto name = file.baseName.setExtension(".expected");
-        run(format("%s %s --dir=%s", harExe, file, outTestDir.buildPath(name)));
+
         auto expected = file.setExtension(".expected");
         auto actual = outTestDir.buildPath(name);
-        run(format("diff --brief -r %s %s", expected, actual));
+
+        auto cmd = format("%s %s --dir=%s", harExe, file, actual);
+
+        const summary = buildPath(expected, "summary.txt");
+        if (exists(summary))
+            cmd ~= " --summary=" ~ actual ~ "/summary.txt";
+
+        run(cmd);
+        runProcess([ "git", "diff", "--no-index", "--ignore-space-at-eol", "--exit-code", expected, actual ]);
     }
     return 0;
 }

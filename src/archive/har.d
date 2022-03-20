@@ -21,11 +21,11 @@ void foofunc()
 module archive.har;
 
 import std.typecons : Flag, Yes, No;
-import std.array : Appender;
+import std.array : Appender, join;
 import std.format : format;
 import std.string : startsWith, indexOf, stripRight;
 import std.utf : decode, replacementDchar;
-import std.path : dirName, buildPath;
+import std.path : dirName, buildPath, pathSplitter;
 import std.file : dirEntries, DirEntry, exists, isDir, mkdirRecurse, SpanMode;
 import std.stdio : File;
 
@@ -470,7 +470,13 @@ private:
      +/
     void writeHeader(T...)(scope T path, scope lazy Attributes attributes)
     {
-        archive.write(delimiter, ' ', formatQuotedIfSpaces(path));
+        // Normalize Windows paths to use / instead of \
+        version (Windows)
+            auto quoted = formatQuotedIfSpaces(path[0].pathSplitter().join('/'), path[1..$]);
+        else
+            auto quoted = formatQuotedIfSpaces(path);
+
+        archive.write(delimiter, ' ', quoted);
         writeProperties(attributes);
     }
 

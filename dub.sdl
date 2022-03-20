@@ -25,7 +25,7 @@ subPackage {
   targetType "executable"
   targetPath "out/test"
   dependency "har" version="*"
-  sourceFiles "test_command_line_tool.d"
+  sourceFiles "test/cli/test_command_line_tool.d"
   sourcePaths
 }
 

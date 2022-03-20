@@ -38,13 +38,14 @@ int tryMain(string[] args)
     else
         string exeExtention;
 
-    auto rootDir = __FILE_FULL_PATH__.dirName;
+    const rootDir = __FILE_FULL_PATH__.dirName.dirName.dirName;
     auto outDir = rootDir.buildPath("out");
     auto harExe = outDir.buildPath("har" ~ exeExtention);
 
-    auto testDir = rootDir.buildPath("test"); // workaround https://issues.dlang.org/show_bug.cgi?id=6138 : we need absolutePath
-    auto outTestDir = outDir.buildPath("test");
+    const testDir = rootDir.buildPath("test", "cli", "extraction"); // workaround https://issues.dlang.org/show_bug.cgi?id=6138 : we need absolutePath
+    const outTestDir = outDir.buildPath("test", "cli", "extraction");
     mkdirRecurse(outTestDir);
+
     foreach (entry; dirEntries(testDir, "*.har", SpanMode.shallow))
     {
         auto file = entry.name;

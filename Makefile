@@ -10,7 +10,7 @@ har: harmain.d src/archive/har.d
 
 run_tests:
 	${DC} -cov src/archive/har.d -run test/hartests.d
-	rdmd test_command_line_tool.d
+	rdmd test/cli/test_command_line_tool.d
 
 check_clean_git:
 	@if [ -n "$$(git status --porcelain)" ] ; then \

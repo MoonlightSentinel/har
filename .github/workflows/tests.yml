@@ -1,0 +1,47 @@
+name: Test HAR library and CLI
+
+on:
+  pull_request:
+
+  push:
+    branches:
+      - master
+      - github-actions
+
+jobs:
+  main:
+    name: Build and test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Install LDC
+        uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ldc-latest
+
+      - name: Build har
+        run: dub build
+
+      - name: Run library tests
+        run:  dub run :test_library
+
+      - name: Run CLI tests
+        run:  dub run :test_command_line_tool
+
+      - name: Validate Makefile
+        shell: bash
+        run: |
+          set -eux
+          git clean -dfx
+          make DC=ldmd2

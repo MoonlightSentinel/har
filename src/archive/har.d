@@ -537,7 +537,8 @@ private:
         else version (Windows)
         {
             // TODO
-            static assert(false);
+            pragma(msg, "`owner` property is not supported on Windows");
+            return null;
         }
         else
             return null; // Not supported

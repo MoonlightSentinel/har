@@ -26,7 +26,7 @@ import std.format : format;
 import std.string : startsWith, indexOf, stripRight;
 import std.utf : decode, replacementDchar;
 import std.path : dirName, buildPath;
-import std.file : exists, isDir, mkdirRecurse;
+import std.file : dirEntries, DirEntry, exists, isDir, mkdirRecurse, SpanMode;
 import std.stdio : File;
 
 class HarException : Exception
@@ -335,4 +335,235 @@ if (T.length > 0)
         }
     }
     return Formatter(args);
+}
+
+/// Builder for a new HAR archive file
+struct HarCompressor
+{
+    /// The generated HAR file
+    private File archive;
+
+    /// The delimiter to use
+    const string delimiter;
+
+    /// Include the supported file properties in the file header
+    bool includeAttributes;
+
+    /// File system attributes
+    static struct Attributes
+    {
+        ///
+        string owner;
+
+        ///
+        uint permissions;
+    }
+
+    /++
+     + Create a new instance that writes to the file denoted by `path`.
+     +
+     + Params:
+     +   path = the output file
+     +   delimiter = the delimiter for invidividual files (optional)
+     +/
+    this(scope const string path, return const string delimiter = "---")
+    {
+        this.archive = File(path, "w");
+        this.delimiter = delimiter;
+    }
+
+    /++
+     + Create a new instance that writes to `file`.
+     +
+     + Params:
+     +   path = the output file (must be open for writing)
+     +   delimiter = the delimiter for invidividual files (optional)
+     +/
+    this(ref File file, return const string delimiter = "---")
+    {
+        assert(file.isOpen());
+        this.archive = file;
+        this.delimiter = delimiter;
+    }
+
+    /++
+     + Add the members of the directory denoted by `path` to the archive.
+     +
+     + This methods sequentially includes all files found in the directory (and
+     + nested directories). Creates an explicit entry for the directory only iff
+     + the directory is empty (as a directory is usually implied by its members).
+     +
+     + Params:
+     +   path = the directory
+     +/
+    void addDirectory(scope const string path)
+    {
+        assert(isDir(path));
+
+        auto entries = dirEntries(path, SpanMode.breadth);
+
+        // Generate a named entry for empty directories
+        if (entries.empty)
+        {
+            writeEmptyDirectoryHeader(path, getAttributes(path));
+            return;
+        }
+
+        foreach (entry; entries)
+        {
+            if (entry.isDir)
+                addDirectory(entry);
+            else
+                includeFile(entry, getAttributes(entry));
+        }
+    }
+
+    /++
+     + Add a new empty directory to the archive.
+     +
+     + Params:
+     +   path       = the directory
+     +   attributes = the file attributes (`owner`, ...) to use for `includeAttributes`
+     +/
+    void createEmptyDirectory(scope string path, scope lazy Attributes attributes = Attributes.init)
+    {
+        writeEmptyDirectoryHeader(path, attributes);
+    }
+
+    /// Add an existing file to the archive,
+    void addFile(scope const string path)
+    {
+        includeFile(path, getAttributes(path));
+    }
+
+    /++
+     + Add a new file with the specified lines to the archive. Each line will be
+     + terminated with the host-specific line ending (either `\n` or `\r\n`).
+     +
+     + Params:
+     +   path       = the file
+     +   lines      = the individual lines of the file
+     +   attributes = the file attributes (`owner`, ...) to use for `includeAttributes`
+     +/
+    void createFile(T)(scope const string path, T lines, scope lazy Attributes attributes = Attributes.init)
+    {
+        writeHeader(path, attributes);
+
+        foreach (line; lines)
+            archive.writeln(line);
+        archive.writeln();
+    }
+
+    /// Flush buffered data to the archive
+    void flush()
+    {
+        archive.flush();
+    }
+
+private:
+    /++
+     + Writes the header for a file/directory to the archive.
+     +
+     + Params:
+     +   path       = the entire file path (elements are joined)
+     +   attributes = the file attributes (`owner`, ...) to use for `includeAttributes`
+     +/
+    void writeHeader(T...)(scope T path, scope lazy Attributes attributes)
+    {
+        archive.write(delimiter, ' ', formatQuotedIfSpaces(path));
+        writeProperties(attributes);
+    }
+
+    /// Writes the file attributes to the archive.
+    void writeProperties(scope lazy Attributes attributes)
+    {
+        if (includeAttributes)
+        {
+            const attr = attributes;
+            with (attr)
+            {
+                if (owner)
+                    archive.write(" owner=", owner);
+
+                if (permissions)
+                    archive.writef(" permissions=%o", permissions);
+            }
+        }
+        archive.writeln();
+    }
+
+    /// Writes a header for an empty directory to the archive.
+    void writeEmptyDirectoryHeader(scope string path, scope lazy Attributes attributes)
+    {
+        writeHeader(path, path[$-1] == '/' ? "" : "/", attributes);
+    }
+
+    /// Determines the attribues of the file denoted by `path`
+    Attributes getAttributes(const string path)
+    {
+        if (!includeAttributes)
+            return Attributes.init;
+
+        DirEntry de = DirEntry(path);
+        return getAttributes(de);
+    }
+
+    /// Determines the attribues of the file denoted by `de`
+    Attributes getAttributes(scope ref DirEntry de)
+    {
+        if (!includeAttributes)
+            return Attributes.init;
+
+        Attributes res;
+        res.permissions = de.attributes();
+        res.owner = fileOwner(de);
+        return res;
+    }
+
+    /// Determines the owner of the file/directory represented by `de`
+    static string fileOwner(scope ref DirEntry de)
+    {
+        // FIXME: Upsream to Phobos?
+
+        version (Posix)
+        {
+            import core.stdc.string;
+            import core.sys.posix.pwd;
+
+            const name = getpwuid(de.statBuf.st_uid).pw_name;
+            const len = strlen(name);
+            return cast(immutable) name[0 .. len];
+        }
+        else version (Windows)
+        {
+            // TODO
+            static assert(false);
+        }
+        else
+            return null; // Not supported
+    }
+
+    /// Writes the content of the file denoted by `path` to the archive
+    void includeFile(scope const string path, scope lazy Attributes attributes = Attributes.init)
+    {
+        import std.algorithm;
+
+        writeHeader(path, attributes);
+
+        auto content = File(path, "r").byChunk(2 << 12);
+        bool hasNl;
+
+        while (!content.empty)
+        {
+            const chunk = cast(char[]) content.front;
+            hasNl = chunk.endsWith('\n');
+            archive.write(chunk);
+            content.popFront();
+        }
+
+        // Only add a newline if the file didn't end with one
+        // See `Which Newlines belong to the file?` in the README
+        if (!hasNl)
+            archive.writeln();
+    }
 }

@@ -19,7 +19,8 @@ Options
   --quiet           Quiet mode (do not list extracted files)
   --verbose         Verbose mode (print details)
   --dry-run         Dry run, process the HAR file but don't extract it
-`);  
+  --attributes      Include file system attributes in the generated archive
+`);
 }
 
 class SilentException : Exception { this() { super(null); } }
@@ -48,6 +49,7 @@ int tryMain(string[] args)
     bool quietMode = false;
     bool verbose = false;
     bool dryRun = false;
+    bool attributes = false;
 
     {
         size_t newArgsLength = 0;
@@ -67,6 +69,8 @@ int tryMain(string[] args)
                 verbose = true;
             else if (arg == "--dry-run")
                 dryRun = true;
+            else if (arg == "--attributes")
+                attributes = true;
             else
             {
                 stderr.writefln("Error: unknown option '%s'", arg);
@@ -95,7 +99,7 @@ int tryMain(string[] args)
         }
     }
     if (harFileCount == 0)
-        return archiveFiles(args);
+        return archiveFiles(args, attributes, quietMode);
 
     if (harFileCount < args.length)
     {
@@ -157,9 +161,45 @@ int tryMain(string[] args)
     return 0;
 }
 
-int archiveFiles(string[] files)
+int archiveFiles(const string[] files, const bool attributes, const bool quiet)
 {
-    stderr.writeln("Error: creating har archives is not implemented");
-    return 1;
-}
+    import std.algorithm;
+    import std.path;
 
+    HarCompressor hc = HarCompressor(stdout);
+    hc.includeAttributes = attributes;
+
+    foreach (const file; files)
+    {
+        if (isAbsolute(file))
+        {
+            stderr.writeln("Absolute paths are not supported (`", file, "`)!");
+            return 1;
+        }
+
+        const normPath = buildNormalizedPath(file);
+        if (pathSplitter(normPath).canFind(".."))
+        {
+            stderr.writeln("Relative paths using `..` are not supported (`", file, "`)!");
+            return 1;
+        }
+
+        if (isDir(normPath))
+        {
+            if (!quiet) stderr.writeln("Include directory: ", normPath);
+            hc.addDirectory(normPath);
+        }
+        else if (exists(normPath))
+        {
+            if (!quiet) stderr.writeln("Include file: ", normPath);
+            hc.addFile(normPath);
+        }
+        else
+        {
+            stderr.writeln("File `", normPath, "` does not exist!");
+            return 1;
+        }
+    }
+
+    return 0;
+}

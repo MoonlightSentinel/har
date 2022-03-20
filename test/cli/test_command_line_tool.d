@@ -39,11 +39,20 @@ int tryMain(string[] args)
         string exeExtention;
 
     const rootDir = __FILE_FULL_PATH__.dirName.dirName.dirName;
-    auto outDir = rootDir.buildPath("out");
-    auto harExe = outDir.buildPath("har" ~ exeExtention);
+    const testDir = buildPath(rootDir, "test", "cli");
+    const outDir = rootDir.buildPath("out", "test", "cli");
+    const harExe = rootDir.buildPath("out", "har" ~ exeExtention);
 
-    const testDir = rootDir.buildPath("test", "cli", "extraction"); // workaround https://issues.dlang.org/show_bug.cgi?id=6138 : we need absolutePath
-    const outTestDir = outDir.buildPath("test", "cli", "extraction");
+    if (const status = runExtractionTests(testDir, outDir, harExe))
+        return status;
+
+    return 0;
+}
+
+int runExtractionTests(const string testBaseDir, const string outBaseDir, const string harExe)
+{
+    const testDir = testBaseDir.buildPath("extraction");
+    const outTestDir = outBaseDir.buildPath("extraction");
     mkdirRecurse(outTestDir);
 
     foreach (entry; dirEntries(testDir, "*.har", SpanMode.shallow))

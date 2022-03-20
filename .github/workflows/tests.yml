@@ -34,10 +34,14 @@ jobs:
         run: dub build
 
       - name: Run library tests
-        run:  dub run :test_library
+        run: |
+          dub run :test_library
+          make check_clean_git
 
       - name: Run CLI tests
-        run:  dub run :test_command_line_tool
+        run: |
+          dub run :test_command_line_tool
+          make check_clean_git
 
       - name: Validate Makefile
         shell: bash
@@ -45,3 +49,4 @@ jobs:
           set -eux
           git clean -dfx
           make DC=ldmd2
+          make check_clean_git

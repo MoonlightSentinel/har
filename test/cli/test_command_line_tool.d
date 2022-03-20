@@ -50,7 +50,6 @@ int tryMain(string[] args)
     if (const status = runExtractionTests(testDir, outDir, harExe))
         return status;
 
-    version (Windows) {} else // TODO: Fix directory seperators
     if (const status = runCompressionTests(testDir, outDir, harExe))
         return status;
 

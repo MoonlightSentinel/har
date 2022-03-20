@@ -91,3 +91,15 @@ void test(string text, string[] expectedFilenames, size_t testLine = __LINE__)
     });
     assert(expectedFilenames == extractedFiles.data);
 }
+
+version(D_Coverage)
+shared static this()
+{
+    import core.runtime;
+    import std.path;
+
+    static immutable root = dirName(dirName(__FILE_FULL_PATH__));
+    dmd_coverSourcePath(root);
+    dmd_coverDestPath(root);
+    dmd_coverSetMerge(true);
+}

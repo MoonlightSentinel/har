@@ -203,3 +203,15 @@ int archiveFiles(const string[] files, const bool attributes, const bool quiet)
 
     return 0;
 }
+
+version(D_Coverage)
+shared static this()
+{
+    import core.runtime;
+    import std.path;
+
+    static immutable root = dirName(__FILE_FULL_PATH__);
+    dmd_coverSourcePath(root);
+    dmd_coverDestPath(root);
+    dmd_coverSetMerge(true);
+}

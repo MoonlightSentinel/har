@@ -400,7 +400,7 @@ struct HarCompressor
     {
         assert(isDir(path));
 
-        auto entries = dirEntries(path, SpanMode.breadth);
+        auto entries = dirEntries(path, SpanMode.shallow);
 
         // Generate a named entry for empty directories
         if (entries.empty)

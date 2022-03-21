@@ -21,6 +21,10 @@ jobs:
           - ubuntu-latest
           - windows-latest
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v2
@@ -35,16 +39,17 @@ jobs:
 
       - name: Run library tests
         run: |
+          set -eux
           dub run :test_library
           make check_clean_git
 
       - name: Run CLI tests
         run: |
+          set -eux
           dub run :test_command_line_tool
           make check_clean_git
 
       - name: Validate Makefile
-        shell: bash
         run: |
           set -eux
           git clean -dfx

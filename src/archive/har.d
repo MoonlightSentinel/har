@@ -492,7 +492,18 @@ private:
                     archive.write(" owner=", owner);
 
                 if (permissions)
-                    archive.writef(" permissions=%o", permissions);
+                {
+                    version (Posix)
+                    {
+                        import core.sys.posix.sys.stat;
+                        const value = permissions & ~S_IFMT;
+                    }
+                    else
+                    {
+                        const value = permissions;
+                    }
+                    archive.writef(" permissions=%04o", value);
+                }
             }
         }
         archive.writeln();

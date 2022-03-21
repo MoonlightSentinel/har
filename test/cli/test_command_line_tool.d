@@ -90,8 +90,18 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
     {
         import core.stdc.string;
         import core.sys.posix.pwd;
-        // import core.sys.posix.sys.stat;
+        import core.sys.posix.sys.stat;
         import std.conv;
+
+        version (Posix)
+        {
+            import core.sys.posix.sys.stat;
+            enum PERM_MASK = ~S_IFMT;
+        }
+        else
+        {
+            enum PERM_MASK = uint.max;
+        }
 
         const ownerPtr = getpwuid(DirEntry(addedEmptyDir).statBuf.st_uid).pw_name;
         const owner = ownerPtr[0 .. strlen(ownerPtr)];
@@ -105,7 +115,7 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
             setAttributes(file, octal!625);
 
             File expected = File(buildPath(fileProperties, "expected.har"), "w");
-            expected.writefln(`--- file.txt owner=%s permissions=%04o`, owner, getAttributes(file));
+            expected.writefln(`--- file.txt owner=%s permissions=%04o`, owner, getAttributes(file) & PERM_MASK);
             expected.writeln("Hello, World");
 
             std.file.write(buildPath(fileProperties, "extra-args"), "--attributes");
@@ -119,7 +129,7 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
             setAttributes(emptyDir, octal!750);
 
             File expected = File(buildPath(dirProperties, "expected.har"), "w");
-            expected.writefln(`--- empty/ owner=%s permissions=%04o`, owner, getAttributes(emptyDir));
+            expected.writefln(`--- empty/ owner=%s permissions=%04o`, owner, getAttributes(emptyDir) & PERM_MASK);
 
             std.file.write(buildPath(dirProperties, "extra-args"), "--attributes");
         }

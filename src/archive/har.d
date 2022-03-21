@@ -553,9 +553,97 @@ private:
         }
         else version (Windows)
         {
-            // TODO
-            pragma(msg, "`owner` property is not supported on Windows");
-            return null;
+            // https://docs.microsoft.com/en-us/windows/win32/secauthz/finding-the-owner-of-a-file-object-in-c--
+
+            import core.sys.windows.accctrl;
+            import core.sys.windows.aclapi;
+            import core.sys.windows.windows;
+            import std.internal.cstring;
+
+            void enforce(const bool check, const string component, const size_t line = __LINE__)
+            {
+                if (!check)
+                {
+                    const error = GetLastError();
+                    const msg = format!"Failed to determine owner of `%s`: `%s` error %s"(de.name, component, error);
+                    throw new HarException(msg, __FILE__, line);
+                }
+            }
+
+            // Obtain a file / directory handle
+            const cname = tempCString!TCHAR(de.name);
+            auto handle = CreateFile(
+                cname,
+                GENERIC_READ,
+                FILE_SHARE_VALID_FLAGS,
+                null,
+                OPEN_EXISTING,
+                de.isDir ? FILE_FLAG_BACKUP_SEMANTICS : FILE_ATTRIBUTE_NORMAL,
+                null,
+            );
+            enforce(handle != INVALID_HANDLE_VALUE, "CreateFile");
+
+            // Get the owner SID of the file / directory.
+            PSID pSidOwner = null;
+            auto status = GetSecurityInfo(
+                handle,
+                SE_OBJECT_TYPE.SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION,
+                &pSidOwner,
+                null,
+                null,
+                null,
+                null,
+            );
+            enforce(status == ERROR_SUCCESS, "GetSecurityInfo");
+
+            // Determine the name / domain associated with the SID
+            // Pass a static buffer to avoid the second call in most cases
+            TCHAR[40] nameBuffer, domainBuffer;
+            TCHAR[] name = nameBuffer;
+            TCHAR[] domain = domainBuffer;
+
+            DWORD nameLength = nameBuffer.length;
+            DWORD domainLength = domainBuffer.length;
+            SID_NAME_USE eUse = SID_NAME_USE.SidTypeUnknown;
+
+            while (true)
+            {
+                status = LookupAccountSid(
+                    null,                   // name of local or remote computer
+                    pSidOwner,
+                    name.ptr,
+                    &nameLength,
+                    domain.ptr,
+                    &domainLength,
+                    &eUse
+                );
+
+                if (status) // Sucessfully retrieved name/domain
+                {
+                    // Trim trailing null terminator
+                    name = name[0 .. nameLength];
+                    domain = domain[0 .. domainLength];
+                    break;
+                }
+
+                enforce(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "LookupAccountSid");
+                name = new TCHAR[nameLength];
+                domain = new TCHAR[domainLength];
+            }
+
+            static if (is(TCHAR == char))
+            {
+                if (name.ptr is nameBuffer.ptr)
+                    return name.idup();
+                else
+                    return cast(immutable) name;
+            }
+            else
+            {
+                import std.conv : to;
+                return to!string(name);
+            }
         }
         else
             return null; // Not supported

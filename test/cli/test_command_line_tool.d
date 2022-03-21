@@ -86,25 +86,19 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
 
     // Generate custom properties tests
     // Cannot track these in git because ownership / permission is a hassle for several file systems
-    version (Windows) {} else
+    version (all)
     {
-        import core.stdc.string;
-        import core.sys.posix.pwd;
-        import core.sys.posix.sys.stat;
-        import std.conv;
-
         version (Posix)
         {
             import core.sys.posix.sys.stat;
             enum PERM_MASK = ~S_IFMT;
+            const owner = environment["USER"];
         }
         else
         {
             enum PERM_MASK = uint.max;
+            const owner = environment["USERNAME"];
         }
-
-        const ownerPtr = getpwuid(DirEntry(addedEmptyDir).statBuf.st_uid).pw_name;
-        const owner = ownerPtr[0 .. strlen(ownerPtr)];
 
         const fileProperties = buildPath(testDir, "fileProperties");
         scope (success) rmdirRecurse(fileProperties);
@@ -112,7 +106,6 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
             const file = buildPath(fileProperties, "file.txt");
             mkdirRecurse(fileProperties);
             std.file.write(file, "Hello, World");
-            setAttributes(file, octal!625);
 
             File expected = File(buildPath(fileProperties, "expected.har"), "w");
             expected.writefln(`--- file.txt owner=%s permissions=%04o`, owner, getAttributes(file) & PERM_MASK);
@@ -126,7 +119,6 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
         {
             const emptyDir = buildPath(dirProperties, "empty");
             mkdirRecurse(emptyDir);
-            setAttributes(emptyDir, octal!750);
 
             File expected = File(buildPath(dirProperties, "expected.har"), "w");
             expected.writefln(`--- empty/ owner=%s permissions=%04o`, owner, getAttributes(emptyDir) & PERM_MASK);

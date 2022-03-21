@@ -1,0 +1,113 @@
+name: Add binaries to the release
+
+on:
+  push:
+    # Trigger for new tags to associate the release binaries
+    tags:
+      - '*'
+
+    # For testing purposes
+    # branches:
+    #   - github-actions
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos
+          - ubuntu
+          - windows
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Install LDC
+        uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ldc-latest
+
+      - name: Build har
+        shell: bash
+        run: |
+          echo '::group::Build release'
+          set -eux
+
+          if [[ '${{ matrix.os }}' == 'windows' ]]; then
+            EXE=".exe"
+            ZIP="7z a"
+          else
+            EXE=""
+            ZIP="zip -9"
+          fi
+
+          if [[ '${{ matrix.os }}' == 'macos' ]]
+          then
+            LINKER_FLAGS=(
+              -L-dead_strip
+            )
+          else
+            LINKER_FLAGS=(
+              -L--gc-sections
+              -L--as-needed
+            )
+          fi
+
+          ldc2 harmain.d -of=har \
+            -Isrc -i \
+            -O3 -mcpu=native \
+            -flto=full \
+            -defaultlib="phobos2-ldc-lto,druntime-ldc-lto" \
+            -link-defaultlib-shared=false \
+            --function-sections \
+            ${LINKER_FLAGS[@]} \
+            -od=out \
+            -of="out/har$EXE"
+
+          echo '::group::Validate release'
+          dub run :test_library
+          dub run :test_command_line_tool
+
+          echo ::group::Package release
+          cd out
+          $ZIP '../har-${{ matrix.os }}.zip' "har$EXE"
+          ls -aul '../har-${{ matrix.os }}.zip'
+
+      - name: Export the archive
+        uses: actions/upload-artifact@v3
+        with:
+          name: release
+          path: ${{ github.workspace }}/har-${{ matrix.os }}.zip
+
+  release:
+    name: Create the release
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    needs: build
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the generated archives
+        uses: actions/download-artifact@v3
+        with:
+          name: release
+
+      - name: "Generate release changelog"
+        id: changelog
+        uses: heinrichreimer/github-changelog-generator-action@v2.3
+        with:
+          stripHeaders: true
+          stripGeneratorNotice: true
+          compareLink: false
+
+      - name: Create the release
+        uses: ncipollo/release-action@v1
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          artifacts: ${{ github.workspace }}/*.zip
+          artifactErrorsFailBuild: true
+          body: ${{ steps.changelog.outputs.changelog }}

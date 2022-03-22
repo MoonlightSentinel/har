@@ -1,3 +1,4 @@
+import std.exception;
 import std.typecons : Nullable, nullable;
 import std.string : startsWith, endsWith;
 import std.file : exists, getcwd, isDir, mkdirRecurse;
@@ -30,11 +31,21 @@ int main(string[] args)
 {
     try { return tryMain(args); }
     catch (SilentException) { return 1; }
+
+    // Mostly likely a file access with insufficient permissions or related errors
+    catch (ErrnoException e)
+        stderr.writeln("Error: ", e.msg);
+
     catch (HarException e)
-    {
         stderr.writefln("Error: %s(%s) %s", e.file, e.line, e.msg);
-        return 1;
+
+    catch (Exception e)
+    {
+        stderr.writeln("Internal error occurred! Please report an issue at MoonlightSentinel/har");
+        stderr.writeln(e);
     }
+
+    return 1;
 }
 int tryMain(string[] args)
 {

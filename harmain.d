@@ -171,6 +171,12 @@ int archiveFiles(const string[] files, const bool attributes, const bool quiet)
 
     foreach (const file; files)
     {
+        if (!exists(file))
+        {
+            stderr.writeln("File `", file, "` does not exist!");
+            return 1;
+        }
+
         if (isAbsolute(file))
         {
             stderr.writeln("Absolute paths are not supported (`", file, "`)!");
@@ -189,15 +195,10 @@ int archiveFiles(const string[] files, const bool attributes, const bool quiet)
             if (!quiet) stderr.writeln("Include directory: ", normPath);
             hc.addDirectory(normPath);
         }
-        else if (exists(normPath))
+        else
         {
             if (!quiet) stderr.writeln("Include file: ", normPath);
             hc.addFile(normPath);
-        }
-        else
-        {
-            stderr.writeln("File `", normPath, "` does not exist!");
-            return 1;
         }
     }
 

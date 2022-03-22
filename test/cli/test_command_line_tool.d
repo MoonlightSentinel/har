@@ -221,12 +221,11 @@ void runErrorTests(const string testBaseDir, const string outBaseDir, const stri
     test([harExe, __FILE_FULL_PATH__ ], "Absolute paths are not supported (`" ~ __FILE_FULL_PATH__ ~ "`)!");
 
     // Relative paths
-    /+ TODO:
     test([harExe, "../../examples" ], "Relative paths using `..` are not supported (`../../examples`)!");
 
     // Relatives paths are allowed when the .. vanishes during normalization, e.g. `../pwd` => `.`
     test([harExe, "../cli/test_command_line_tool.d" ], null, 0);
-    +/
+    test([harExe, "../cli/../cli/compression/../test_command_line_tool.d" ], null, 0);
 }
 
 void run(string command)

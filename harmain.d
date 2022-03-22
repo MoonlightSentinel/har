@@ -1,6 +1,6 @@
 import std.typecons : Nullable, nullable;
 import std.string : startsWith, endsWith;
-import std.file : exists, isDir, mkdirRecurse;
+import std.file : exists, getcwd, isDir, mkdirRecurse;
 import std.stdio;
 
 import archive.har;
@@ -169,6 +169,8 @@ int archiveFiles(const string[] files, const bool attributes, const bool quiet)
     HarCompressor hc = HarCompressor(stdout);
     hc.includeAttributes = attributes;
 
+    const cwd = getcwd();
+
     foreach (const file; files)
     {
         if (!exists(file))
@@ -183,7 +185,10 @@ int archiveFiles(const string[] files, const bool attributes, const bool quiet)
             return 1;
         }
 
-        const normPath = buildNormalizedPath(file);
+        // Allow path with .. if they resolve into the current directory
+        // Workaround: buildNormalizedPath("../pwd") isn't resolved to .
+        const normPath = buildNormalizedPath(cwd, file).relativePath(cwd);
+
         if (pathSplitter(normPath).canFind(".."))
         {
             stderr.writeln("Relative paths using `..` are not supported (`", file, "`)!");

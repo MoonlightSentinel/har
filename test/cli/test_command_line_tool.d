@@ -5,6 +5,7 @@ import std.range;
 import std.path;
 import std.file;
 import std.stdio;
+import std.string;
 
 import std.format : format;
 import std.process;
@@ -52,6 +53,8 @@ int tryMain(string[] args)
 
     if (const status = runCompressionTests(testDir, outDir, harExe))
         return status;
+
+    runErrorTests(testDir, outDir, harExe);
 
     return 0;
 }
@@ -181,6 +184,49 @@ int runCompressionTests(const string testBaseDir, const string outBaseDir, const
         }
     }
     return 0;
+}
+
+void runErrorTests(const string testBaseDir, const string outBaseDir, const string harExe)
+{
+    void test(scope const char[][] cmd, scope const char[] expected, const int expectedStatus = 1)
+    {
+        writefln(`[PROC] %-("%s" %)`, cmd);
+        const res = execute(cmd, null, Config.none, size_t.max, testBaseDir);
+        // writeln("Running in ", testBaseDir);
+        writefln(`(%s): %-s`, res.status, res.output);
+        if (res.status != expectedStatus)
+        {
+            writefln("Test command exited with %s instead of %s!", res.status, expectedStatus);
+            throw quit();
+        }
+
+        const actual = strip(res.output);
+
+        if (expected && actual != expected)
+        {
+            writeln("Test command output differs!");
+            writeln("Expected: ", expected);
+            writeln("Actual  : ", actual);
+            throw quit();
+        }
+    }
+
+    // File contained in `testBaseDir`
+    const example = "compression/file/hello.d";
+
+    // Missing file
+    test([harExe, "fileThatDoesNotExist.txt"], "File `fileThatDoesNotExist.txt` does not exist!");
+
+    // Absolute paths
+    test([harExe, __FILE_FULL_PATH__ ], "Absolute paths are not supported (`" ~ __FILE_FULL_PATH__ ~ "`)!");
+
+    // Relative paths
+    /+ TODO:
+    test([harExe, "../../examples" ], "Relative paths using `..` are not supported (`../../examples`)!");
+
+    // Relatives paths are allowed when the .. vanishes during normalization, e.g. `../pwd` => `.`
+    test([harExe, "../cli/test_command_line_tool.d" ], null, 0);
+    +/
 }
 
 void run(string command)
